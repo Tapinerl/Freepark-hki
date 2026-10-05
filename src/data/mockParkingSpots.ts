@@ -1,0 +1,80 @@
+import { ParkingSpot } from "@/types/parking";
+
+// Fictional examples for UI development, not verified parking advice.
+export const mockParkingSpots: ParkingSpot[] = [
+  {
+    id: "1",
+    name: "Siltasaarenkatu 3",
+    address: "Siltasaarenkatu 3, 00530 Helsinki",
+    latitude: 60.1783,
+    longitude: 24.9496,
+    parkingType: "Street parking",
+    maxDurationMinutes: 120,
+    description:
+      "Example street parking near Hakaniemi. A parking disc may be required. Always check the signs on arrival.",
+    isVerified: true,
+    isFavorite: false,
+    neighborhood: "Hakaniemi",
+    availability: "08:00–16:00",
+  },
+  {
+    id: "2",
+    name: "Koirasaarentie 23",
+    address: "Koirasaarentie 23, 00590 Helsinki",
+    latitude: 60.1692,
+    longitude: 25.0445,
+    parkingType: "Street parking",
+    maxDurationMinutes: 1440,
+    description:
+      "Example spot in Kruunuvuorenranta. Check local restrictions and temporary notices before parking.",
+    isVerified: true,
+    isFavorite: true,
+    neighborhood: "Kruunuvuorenranta",
+    availability: "24 h free",
+  },
+  {
+    id: "3",
+    name: "Pohjoisranta 12",
+    address: "Pohjoisranta 12, 00170 Helsinki",
+    latitude: 60.1741,
+    longitude: 24.9615,
+    parkingType: "Street parking",
+    maxDurationMinutes: null,
+    description:
+      "Example evening parking by the waterfront. Daytime parking may be paid. Read all posted signs.",
+    isVerified: false,
+    isFavorite: false,
+    neighborhood: "Kruununhaka",
+    availability: "Free after 18:00",
+  },
+  {
+    id: "4",
+    name: "Käpylä station",
+    address: "Panuntie 6, 00620 Helsinki",
+    latitude: 60.2201,
+    longitude: 24.9469,
+    parkingType: "Parking lot",
+    maxDurationMinutes: 720,
+    description:
+      "Example parking lot near the station. Access conditions will be added when real data is connected.",
+    isVerified: false,
+    isFavorite: false,
+    neighborhood: "Käpylä",
+    availability: "12 h free",
+  },
+  {
+    id: "5",
+    name: "Lauttasaari waterfront",
+    address: "Meripuistotie 8, 00200 Helsinki",
+    latitude: 60.1519,
+    longitude: 24.8763,
+    parkingType: "Street parking",
+    maxDurationMinutes: 240,
+    description:
+      "Example street parking near the park. Spaces and restrictions are illustrative only.",
+    isVerified: false,
+    isFavorite: false,
+    neighborhood: "Lauttasaari",
+    availability: "4 h free",
+  },
+];

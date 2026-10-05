@@ -1,18 +1,29 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
-import { useColorScheme } from 'react-native';
+import { Stack } from "expo-router";
+import { StatusBar } from "expo-status-bar";
+import { ParkingProvider } from "@/hooks/useParkingSpots";
+import { colors } from "@/constants/colors";
 
-import { AnimatedSplashOverlay } from '@/components/animated-icon';
-import AppTabs from '@/components/app-tabs';
-
-SplashScreen.preventAutoHideAsync();
-
-export default function TabLayout() {
-  const colorScheme = useColorScheme();
+export default function RootLayout() {
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <AnimatedSplashOverlay />
-      <AppTabs />
-    </ThemeProvider>
+    <ParkingProvider>
+      <StatusBar style="dark" />
+      <Stack
+        screenOptions={{
+          headerStyle: { backgroundColor: colors.background },
+          headerTintColor: colors.primary,
+          contentStyle: { backgroundColor: colors.background },
+          headerShadowVisible: false,
+        }}
+      >
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen
+          name="parking/[id]"
+          options={{ title: "Parking details" }}
+        />
+        <Stack.Screen name="login" options={{ title: "Log in" }} />
+        <Stack.Screen name="signup" options={{ title: "Create account" }} />
+        <Stack.Screen name="saved" options={{ title: "Saved Spots" }} />
+      </Stack>
+    </ParkingProvider>
   );
 }
