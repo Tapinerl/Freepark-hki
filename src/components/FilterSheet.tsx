@@ -3,15 +3,8 @@ import { Dispatch, SetStateAction } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors } from "@/constants/colors";
 import { Button, ui } from "./ui";
+import { DURATION_OPTIONS, toggleDuration } from "@/lib/durationFilters";
 
-const durations = [
-  { label: "30 Minutes", value: 30 },
-  { label: "1 Hour", value: 60 },
-  { label: "2 Hours", value: 120 },
-  { label: "4 Hours", value: 240 },
-  { label: "8 Hours", value: 480 },
-  { label: "12+ Hours", value: 720 },
-];
 export function DurationFilter({
   value,
   onChange,
@@ -25,18 +18,14 @@ export function DurationFilter({
     <View style={{ gap: 8 }}>
       <Text style={ui.label}>Parking for</Text>
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-        {durations.map((item) => (
+        {DURATION_OPTIONS.map((item) => (
           <Pressable
             key={item.value}
             accessibilityRole="button"
             aria-pressed={value.includes(item.value)}
             accessibilityState={{ selected: value.includes(item.value) }}
             onPress={() =>
-              onChange((current) =>
-                current.includes(item.value)
-                  ? current.filter((duration) => duration !== item.value)
-                  : [...current, item.value].sort((a, b) => a - b),
-              )
+              onChange((current) => toggleDuration(current, item.value))
             }
             style={{
               width: "31%",

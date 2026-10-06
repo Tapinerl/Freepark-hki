@@ -54,13 +54,6 @@ export default function ParkingDetailScreen() {
       <Text style={ui.subtitle}>
         Demo data. Saved spots are kept for this session only.
       </Text>
-      <Button
-        title="Back to map"
-        secondary
-        onPress={() =>
-          router.canGoBack() ? router.back() : router.replace("/")
-        }
-      />
     </Screen>
   );
 }

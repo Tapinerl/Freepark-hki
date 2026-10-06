@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Keyboard,
@@ -10,9 +10,10 @@ import {
 import { router, useFocusEffect } from "expo-router";
 import { Image } from "expo-image";
 import { SymbolView } from "expo-symbols";
-import * as Location from "expo-location";
+import { getCurrentLocation } from "@/lib/currentLocation";
 import Screen from "@/components/Screen";
-import SearchBar from "@/components/SearchBar";
+import LocationSearch from "@/components/LocationSearch";
+import { Destination, withinHelsinkiBounds } from "@/lib/locationSearch";
 import { DurationFilter } from "@/components/FilterSheet";
 import ParkingIllustration from "@/components/ParkingIllustration";
 import ParkingResults from "@/components/ParkingResults";
@@ -25,10 +26,13 @@ import { nearbySpots, Coordinates } from "@/lib/parkingSearch";
 export default function MapScreen() {
   const { spots } = useParkingSpots();
   const [query, setQuery] = useState("");
-  const [durations, setDurations] = useState<number[]>([60]);
+  const [durations, setDurations] = useState<number[]>([30, 60]);
   const [mode, setMode] = useState<"Map" | "List">("Map");
   const [stage, setStage] = useState<"home" | "loading" | "results">("home");
   const [coordinates, setCoordinates] = useState<Coordinates | null>(null);
+  const [searchLocation, setSearchLocation] = useState<Coordinates | null>(null);
+  const [searchUsesUserLocation, setSearchUsesUserLocation] = useState(false);
+  const [userLocation, setUserLocation] = useState<Coordinates | null>(null);
   const [locating, setLocating] = useState(false);
   const [error, setError] = useState("");
   const locationRequest = useRef(0);
@@ -49,28 +53,29 @@ export default function MapScreen() {
   }, [stage]);
 
   async function useMyLocation() {
+    if (locating) return;
+    Keyboard.dismiss();
     const request = ++locationRequest.current;
     setLocating(true);
     setError("");
     try {
-      const permission = await Location.requestForegroundPermissionsAsync();
+      const position = await getCurrentLocation();
       if (request !== locationRequest.current) return;
-      if (!permission.granted) {
-        setError(
-          "Location access is off. Allow access in your browser or phone settings, or enter a destination.",
-        );
+      if (!withinHelsinkiBounds(position.coords)) {
+        setError("Free parking search is currently available only in Helsinki.");
         return;
       }
-      const position = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
-      if (request !== locationRequest.current) return;
       setCoordinates(position.coords);
+      if (stage === "results") {
+        setSearchLocation({ latitude: position.coords.latitude, longitude: position.coords.longitude });
+        setSearchUsesUserLocation(true);
+      }
+      setUserLocation(position.coords);
       setQuery("My location");
-    } catch {
+    } catch (error) {
       if (request === locationRequest.current)
         setError(
-          "We couldn’t find your location. Please enter a destination instead.",
+          error instanceof Error ? error.message : "We couldn’t find your location. Please try again.",
         );
     } finally {
       if (request === locationRequest.current) setLocating(false);
@@ -81,7 +86,20 @@ export default function MapScreen() {
     setLocating(false);
     setQuery(value);
     setCoordinates(null);
+    if (!value.trim()) {
+      setSearchLocation(null);
+      setSearchUsesUserLocation(false);
+      setUserLocation(null);
+    }
     setError("");
+  }
+  function selectDestination(destination: Destination) {
+    locationRequest.current += 1;
+    setLocating(false);
+    setQuery(destination.label);
+    setCoordinates(destination);
+    setError("");
+    Keyboard.dismiss();
   }
   function search() {
     if (locating) return;
@@ -89,11 +107,17 @@ export default function MapScreen() {
       setError("Enter a destination or use your location to search.");
       return;
     }
+    if (!coordinates || !withinHelsinkiBounds(coordinates)) {
+      setError("Choose a Helsinki location from the suggestions before searching.");
+      return;
+    }
+    setSearchLocation({ ...coordinates });
+    setSearchUsesUserLocation(coordinates === userLocation);
     setError("");
     Keyboard.dismiss();
-    setStage("loading");
+    if (stage !== "results") setStage("loading");
   }
-  const filtered = nearbySpots(spots, { query, durations, coordinates });
+  const filtered = useMemo(() => nearbySpots(spots, { query: "", durations, coordinates: searchLocation }), [spots, durations, searchLocation]);
   if (stage === "loading")
     return (
       <Screen fit>
@@ -138,6 +162,12 @@ export default function MapScreen() {
         onUseLocation={useMyLocation}
         locating={locating}
         error={error}
+        initialLocation={searchLocation}
+        searchUsesUserLocation={searchUsesUserLocation}
+        destinationSelected={!!coordinates}
+        onSelectDestination={selectDestination}
+        onSearch={search}
+        userLocation={userLocation}
       />
     );
 
@@ -171,10 +201,8 @@ export default function MapScreen() {
       </View>
       <View style={styles.locationCard}>
         <Text style={ui.label}>Location</Text>
-        <SearchBar
-          value={query}
-          onChangeText={changeQuery}
-        />
+        <LocationSearch value={query} onChangeText={changeQuery} selected={!!coordinates} onSelect={selectDestination} onSubmitEditing={search} />
+        <Text style={{ color: colors.muted, fontSize: 12 }}>Helsinki locations only for now</Text>
         <Text style={styles.orText}>OR</Text>
         <Pressable
           accessibilityRole="button"
@@ -226,7 +254,7 @@ export default function MapScreen() {
       <Pressable
         accessibilityRole="button"
         onPress={search}
-        style={({ pressed }) => [styles.searchButton, pressed && { opacity: 0.7 }]}
+        style={({ pressed }) => [styles.searchButton, pressed && { opacity: 0.75 }]}
       >
         <Text style={styles.searchButtonText}>Search for free parking spots</Text>
       </Pressable>
@@ -234,7 +262,7 @@ export default function MapScreen() {
   );
 }
 const styles = StyleSheet.create({
-  content: { padding: 16, paddingBottom: 12, gap: 10 },
+  content: { padding: 16, paddingHorizontal: 20, paddingBottom: 38, gap: 10 },
   resultOptions: { gap: 8 },
   topRow: { zIndex: 1, flexDirection: "row", alignItems: "flex-start", gap: 12 },
   savedButton: {
@@ -264,15 +292,15 @@ const styles = StyleSheet.create({
     pointerEvents: "none",
   },
   searchButton: {
-    minHeight: 64,
-    borderRadius: 18,
+    minHeight: 56,
+    borderRadius: 16,
     backgroundColor: colors.primary,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 18,
+    padding: 16,
+    boxShadow: "0px 8px 16px #0055B829",
   },
-  searchButtonText: { color: "white", fontSize: 18, fontWeight: "800", textAlign: "center" },
+  searchButtonText: { color: "white", fontSize: 16, fontWeight: "800", textAlign: "center" },
   orText: { fontSize: 11, lineHeight: 14, color: colors.muted, textAlign: "center", fontWeight: "600" },
   locationCard: {
     zIndex: 1,

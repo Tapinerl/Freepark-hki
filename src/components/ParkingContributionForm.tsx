@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
+import { SymbolView } from "expo-symbols";
 import Screen from "@/components/Screen";
 import { Image } from "expo-image";
 import { ImagePickerAsset } from "expo-image-picker";
@@ -7,7 +8,7 @@ import { Button, Card, Field, ui } from "@/components/ui";
 import { ParkingType } from "@/types/parking";
 import { colors } from "@/constants/colors";
 
-export default function ParkingContributionForm({ photo, onChangePhoto }: { photo: ImagePickerAsset; onChangePhoto: () => void }) {
+export default function ParkingContributionForm({ photo, onChangePhoto, onAbort }: { photo: ImagePickerAsset; onChangePhoto: () => void; onAbort: () => void }) {
   const [address, setAddress] = useState("");
   const [parkingType, setParkingType] = useState<ParkingType>("Street parking");
   const [duration, setDuration] = useState("");
@@ -35,6 +36,24 @@ export default function ParkingContributionForm({ photo, onChangePhoto }: { phot
   }
   return (
     <Screen fit>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Go back and discard parking spot"
+        onPress={onAbort}
+        style={({ pressed }) => ({
+          alignSelf: "flex-start",
+          minWidth: 44,
+          minHeight: 44,
+          justifyContent: "center",
+          opacity: pressed ? 0.6 : 1,
+        })}
+      >
+        <SymbolView
+          name={{ ios: "chevron.left", android: "arrow_back", web: "arrow_back" }}
+          tintColor={colors.primary}
+          size={24}
+        />
+      </Pressable>
       <Text style={[ui.title, { fontSize: 24, lineHeight: 28 }]}>Describe your parking spot</Text>
       <Image source={{ uri: photo.uri }} style={{ width: "100%", height: 180, borderRadius: 16 }} contentFit="cover" accessibilityLabel="Selected parking spot photo" />
       <Button compact title="Change photo" secondary onPress={onChangePhoto} />

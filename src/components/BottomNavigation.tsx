@@ -4,6 +4,7 @@ import {
   Animated,
   Easing,
   Platform,
+  PixelRatio,
   Pressable,
   StyleSheet,
   Text,
@@ -14,6 +15,7 @@ import { colors } from "@/constants/colors";
 
 const CUTOUT_WIDTH = 72;
 const CUTOUT_HEIGHT = 62;
+const SHOULDER_WIDTH = 20;
 const BAR_HEIGHT = 64;
 
 export default function BottomNavigation({
@@ -47,7 +49,9 @@ export default function BottomNavigation({
 
   useEffect(() => {
     if (!width) return;
-    const target = tabWidth * state.index + (tabWidth - CUTOUT_WIDTH) / 2;
+    const target = PixelRatio.roundToNearestPixel(
+      tabWidth * state.index + (tabWidth - CUTOUT_WIDTH) / 2,
+    );
     horizontal.stopAnimation();
     vertical.stopAnimation();
     // First layout, resizing, and reduced motion jump directly to the tab.
@@ -61,19 +65,19 @@ export default function BottomNavigation({
     const animation = Animated.sequence([
       Animated.timing(vertical, {
         toValue: -CUTOUT_HEIGHT - 2,
-        duration: 80,
+        duration: 40,
         easing: Easing.in(Easing.quad),
         useNativeDriver: nativeDriver,
       }),
       Animated.timing(horizontal, {
         toValue: target,
-        duration: 70,
+        duration: 35,
         easing: Easing.inOut(Easing.quad),
         useNativeDriver: nativeDriver,
       }),
       Animated.timing(vertical, {
         toValue: 0,
-        duration: 130,
+        duration: 65,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: nativeDriver,
       }),
@@ -101,8 +105,10 @@ export default function BottomNavigation({
           <Animated.View
             testID="navigation-cutout"
             pointerEvents="none"
+            renderToHardwareTextureAndroid
+            shouldRasterizeIOS
             style={[
-              styles.cutout,
+              styles.cutoutFrame,
               {
                 transform: [
                   { translateX: horizontal },
@@ -111,11 +117,12 @@ export default function BottomNavigation({
               },
             ]}
           >
-            <View style={[styles.shoulder, { left: -20 }]}>
-              <View style={[styles.blueCorner, { borderTopRightRadius: 20 }]} />
+            <View style={styles.cutout} />
+            <View style={[styles.shoulder, { left: 0 }]}>
+              <View style={[styles.blueCorner, { left: 0, borderTopRightRadius: 20 }]} />
             </View>
-            <View style={[styles.shoulder, { right: -20 }]}>
-              <View style={[styles.blueCorner, { borderTopLeftRadius: 20 }]} />
+            <View style={[styles.shoulder, { right: 0 }]}>
+              <View style={[styles.blueCorner, { right: 0, borderTopLeftRadius: 20 }]} />
             </View>
           </Animated.View>
         )}
@@ -169,10 +176,19 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 0,
     overflow: "hidden",
   },
+  // Include both shoulders in the animation layer's bounds so they are
+  // composited together without clipping the outer curves or exposing seams.
+  cutoutFrame: {
+    position: "absolute",
+    top: 0,
+    left: -SHOULDER_WIDTH,
+    width: CUTOUT_WIDTH + SHOULDER_WIDTH * 2,
+    height: CUTOUT_HEIGHT,
+  },
   cutout: {
     position: "absolute",
     top: 0,
-    left: 0,
+    left: SHOULDER_WIDTH,
     width: CUTOUT_WIDTH,
     height: CUTOUT_HEIGHT,
     backgroundColor: colors.background,
@@ -182,11 +198,13 @@ const styles = StyleSheet.create({
   shoulder: {
     position: "absolute",
     top: 0,
-    width: 20,
+    // Overlap the cutout by one point so independently rasterized edges
+    // cannot expose a hairline of the blue bar between the shapes.
+    width: 21,
     height: 20,
     backgroundColor: colors.background,
   },
-  blueCorner: { width: 20, height: 20, backgroundColor: colors.primary },
+  blueCorner: { position: "absolute", top: 0, width: 20, height: 20, backgroundColor: colors.primary },
   tab: {
     flex: 1,
     minHeight: BAR_HEIGHT,

@@ -86,7 +86,11 @@ export default function AddScreen() {
   return (
     <>
       {photo ? (
-        <ParkingContributionForm photo={photo} onChangePhoto={() => setShowSources(true)} />
+        <ParkingContributionForm photo={photo} onChangePhoto={() => setShowSources(true)} onAbort={() => {
+          setPhoto(null);
+          setShowSources(false);
+          setFeedback("");
+        }} />
       ) : (
         <Screen fit contentStyle={[styles.content, compact && styles.compactContent, shortScreen && styles.shortContent]}>
           <View style={styles.header}>
@@ -147,7 +151,7 @@ export default function AddScreen() {
 }
 
 const styles = StyleSheet.create({
-  content: { padding: 24, paddingTop: 32, paddingBottom: 20, gap: 20 },
+  content: { padding: 24, paddingHorizontal: 20, paddingTop: 32, paddingBottom: 20, gap: 20 },
   compactContent: { padding: 20, paddingTop: 20, gap: 14 },
   shortContent: { paddingTop: 16, paddingBottom: 12, gap: 10 },
   shortDescription: { fontSize: 12, lineHeight: 16 },
