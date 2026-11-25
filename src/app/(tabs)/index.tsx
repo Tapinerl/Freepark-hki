@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Keyboard,
@@ -15,20 +15,19 @@ import Screen from "@/components/Screen";
 import LocationSearch from "@/components/LocationSearch";
 import { Destination, withinHelsinkiBounds } from "@/lib/locationSearch";
 import { DurationFilter } from "@/components/FilterSheet";
-import ParkingIllustration from "@/components/ParkingIllustration";
 import ParkingResults from "@/components/ParkingResults";
 import ResultToggle from "@/components/ResultToggle";
-import { Button, ui } from "@/components/ui";
+import { ui } from "@/components/ui";
 import { colors } from "@/constants/colors";
 import { useParkingSpots } from "@/hooks/useParkingSpots";
-import { nearbySpots, Coordinates } from "@/lib/parkingSearch";
+import { filterParkingSpots, Coordinates } from "@/lib/parkingSearch";
 
 export default function MapScreen() {
-  const { spots } = useParkingSpots();
+  const { spots, search: fetchParking, status, error: parkingError, pagination, loadingMore, pageError, retry, loadMore, cancel } = useParkingSpots();
   const [query, setQuery] = useState("");
   const [durations, setDurations] = useState<number[]>([30, 60]);
   const [mode, setMode] = useState<"Map" | "List">("Map");
-  const [stage, setStage] = useState<"home" | "loading" | "results">("home");
+  const [stage, setStage] = useState<"home" | "results">("home");
   const [coordinates, setCoordinates] = useState<Coordinates | null>(null);
   const [searchLocation, setSearchLocation] = useState<Coordinates | null>(null);
   const [searchUsesUserLocation, setSearchUsesUserLocation] = useState(false);
@@ -45,12 +44,6 @@ export default function MapScreen() {
       };
     }, []),
   );
-  useEffect(() => {
-    if (stage !== "loading") return;
-    // Brief preview transition while the app still uses synchronous mock data.
-    const timer = setTimeout(() => setStage("results"), 1400);
-    return () => clearTimeout(timer);
-  }, [stage]);
 
   async function useMyLocation() {
     if (locating) return;
@@ -69,6 +62,7 @@ export default function MapScreen() {
       if (stage === "results") {
         setSearchLocation({ latitude: position.coords.latitude, longitude: position.coords.longitude });
         setSearchUsesUserLocation(true);
+        void fetchParking(position.coords);
       }
       setUserLocation(position.coords);
       setQuery("My location");
@@ -90,6 +84,7 @@ export default function MapScreen() {
       setSearchLocation(null);
       setSearchUsesUserLocation(false);
       setUserLocation(null);
+      if (stage === "results") void fetchParking({ latitude: 60.1699, longitude: 24.9384 });
     }
     setError("");
   }
@@ -115,43 +110,22 @@ export default function MapScreen() {
     setSearchUsesUserLocation(coordinates === userLocation);
     setError("");
     Keyboard.dismiss();
-    if (stage !== "results") setStage("loading");
+    setStage("results");
+    void fetchParking(coordinates);
   }
-  const filtered = useMemo(() => nearbySpots(spots, { query: "", durations, coordinates: searchLocation }), [spots, durations, searchLocation]);
-  if (stage === "loading")
-    return (
-      <Screen fit>
-        <View style={styles.loading}>
-          <Text
-            style={[
-              ui.subtitle,
-              { color: colors.primary, textAlign: "center" },
-            ]}
-          >
-            Next stop:{"\n"}
-            <Text style={ui.heading}>Parkki</Text>
-          </Text>
-          <ParkingIllustration />
-          <ActivityIndicator
-            size="large"
-            color={colors.primary}
-            accessibilityLabel="Finding parking spots"
-          />
-          <Text style={ui.title}>Almost parked!</Text>
-          <Text style={[ui.subtitle, { textAlign: "center" }]}>
-            We’re getting Helsinki’s parking map ready for you.
-          </Text>
-          <Button
-            title="Cancel search"
-            secondary
-            onPress={() => setStage("home")}
-          />
-        </View>
-      </Screen>
-    );
+  const filtered = useMemo(() => filterParkingSpots(spots, durations), [spots, durations]);
   if (stage === "results")
     return (
       <ParkingResults
+        status={status}
+        parkingError={parkingError}
+        pageError={pageError}
+        pagination={pagination}
+        loadedCount={spots.length}
+        loadingMore={loadingMore}
+        onRetry={retry}
+        onCancelSearch={() => { cancel(); setStage("home"); }}
+        onLoadMore={loadMore}
         spots={filtered}
         query={query}
         durations={durations}
@@ -320,10 +294,4 @@ const styles = StyleSheet.create({
     padding: 10,
   },
   durationCard: { backgroundColor: "white", padding: 10, borderRadius: 16 },
-  loading: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 16,
-  },
 });

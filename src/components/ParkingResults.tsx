@@ -20,13 +20,14 @@ import { SymbolView } from "expo-symbols";
 import ParkingCard from "./ParkingCard";
 import ParkingMap from "./ParkingMap";
 import { Coordinates } from "@/lib/parkingSearch";
-import EmptyState from "./EmptyState";
+import { Button } from "./ui";
 import ResultToggle from "./ResultToggle";
 import LocationSearch from "./LocationSearch";
 import { Destination } from "@/lib/locationSearch";
 import { DurationFilter } from "./FilterSheet";
 import { colors } from "@/constants/colors";
-import { ParkingSpot } from "@/types/parking";
+import { Pagination, ParkingSpot } from "@/types/parking";
+import { ParkingStatus } from "@/hooks/useParkingSpots";
 
 export default function ParkingResults({
   spots,
@@ -43,7 +44,17 @@ export default function ParkingResults({
   searchUsesUserLocation,
   userLocation,
   destinationSelected, onSelectDestination, onSearch,
+  status, parkingError, pageError, pagination, loadedCount, loadingMore, onRetry, onLoadMore, onCancelSearch,
 }: {
+  status: ParkingStatus;
+  parkingError: string;
+  pageError: string;
+  pagination: Pagination | null;
+  loadedCount: number;
+  loadingMore: boolean;
+  onRetry: () => void;
+  onCancelSearch: () => void;
+  onLoadMore: () => void;
   destinationSelected: boolean;
   onSelectDestination: (destination: Destination) => void;
   onSearch: () => void;
@@ -87,35 +98,14 @@ export default function ParkingResults({
     });
   }, [popupProgress]);
   useEffect(() => () => { popupProgress.stopAnimation(); }, [popupProgress]);
-  const [refreshing, setRefreshing] = useState(false);
-  const [refreshProgress] = useState(() => new Animated.Value(0));
-  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => () => {
-    if (refreshTimer.current) clearTimeout(refreshTimer.current);
-    refreshProgress.stopAnimation();
-  }, [refreshProgress]);
   const changeDurations: Dispatch<SetStateAction<number[]>> = (next) => {
-    // Apply immediately; the animation acknowledges the update without
-    // delaying results or interrupting additional filter presses.
     dismissSpot();
     onDurationsChange(next);
-    if (refreshTimer.current) clearTimeout(refreshTimer.current);
-    refreshProgress.stopAnimation();
-    refreshProgress.setValue(0);
-    setRefreshing(true);
-    Animated.timing(refreshProgress, {
-      toValue: 1, duration: 160, easing: Easing.out(Easing.cubic),
-      useNativeDriver: Platform.OS !== "web",
-    }).start();
-    refreshTimer.current = setTimeout(() => {
-      Animated.timing(refreshProgress, {
-        toValue: 0, duration: 160, useNativeDriver: Platform.OS !== "web",
-      }).start(({ finished }) => { if (finished) setRefreshing(false); });
-    }, 450);
   };
   const [panelHeight, setPanelHeight] = useState(0);
   const [topControlsHeight, setTopControlsHeight] = useState(0);
   const [expanded, setExpanded] = useState(true);
+  const minimizedEmptyResults = mode === "Map" && !expanded && status === "success" && loadedCount === 0;
   const [filterHeight, setFilterHeight] = useState(140);
   const [translation] = useState(() => new Animated.Value(0));
   const dragStart = useRef(0);
@@ -196,12 +186,17 @@ export default function ParkingResults({
             </View>
             <Pressable accessibilityRole="button" onPress={() => { dismissSpot(); onSearch(); }} style={{ backgroundColor: colors.primary, borderRadius: 12, padding: 12, marginTop: 8, minHeight: 44 }}><Text style={{ color: "white", textAlign: "center", fontWeight: "700" }}>Search for free parking spots</Text></Pressable>
             {Boolean(error) && <Text accessibilityLiveRegion="polite" style={styles.error}>{error}</Text>}
-            <View style={{ position: "relative", minHeight: 30 }}>
-            {refreshing && <Animated.View pointerEvents="none" accessibilityLiveRegion="polite" style={[styles.refreshNotice, { opacity: refreshProgress, transform: [{ translateY: refreshProgress.interpolate({ inputRange: [0, 1], outputRange: [6, 0] }) }] }]}>
-              <ActivityIndicator size="small" color={colors.primary} />
-              <Text style={styles.refreshText}>Updating nearby parking…</Text>
-            </Animated.View>}
-            <Text accessibilityLiveRegion="polite" style={styles.resultCount}>{spots.length} {spots.length === 1 ? "spot matches" : "spots match"} your filters</Text>
+            <View accessibilityLiveRegion="polite" style={{ gap: 8, paddingTop: 8 }}>
+              {status === "loading" && <><View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}><ActivityIndicator color={colors.primary} /><Text style={styles.refreshText}>Searching for verified parking locations…</Text></View><Button compact secondary title="Cancel search" onPress={onCancelSearch} /></>}
+              {status === "error" && <><Text style={styles.error}>Parking data couldn’t be loaded. {parkingError}</Text><Button compact title="Retry parking search" onPress={onRetry} /></>}
+              {status === "success" && <>
+                <Text style={styles.resultCount}>{spots.length} matching · {loadedCount} of {pagination?.total ?? 0} published locations loaded · within 500 m</Text>
+                {loadedCount === 0 ? <><Text style={styles.statusTitle}>No verified free parking found in this area yet.</Text>{!minimizedEmptyResults && <Text style={styles.error}>FreePark is still expanding verified coverage.</Text>}</> : spots.length === 0 && <Text style={styles.error}>No loaded locations match these duration filters. Try other durations or load more results. Unknown maximum stays remain visible as unconfirmed.</Text>}
+                {!minimizedEmptyResults && Boolean(pageError) && <Text style={styles.error}>{pageError}</Text>}
+                {!minimizedEmptyResults && pagination && loadedCount < pagination.total && (loadedCount <= 10000
+                  ? loadingMore ? <ActivityIndicator accessibilityLabel="Loading more parking locations" color={colors.primary} /> : <Button compact secondary title={pageError ? "Retry loading more" : "Load more locations"} onPress={onLoadMore} />
+                  : <Text style={styles.error}>More results are available. Search a different destination to narrow the area.</Text>)}
+              </>}
             </View>
     </>
   );
@@ -241,10 +236,9 @@ export default function ParkingResults({
               style={styles.list}
               data={spots}
               keyExtractor={(spot) => spot.id}
-              renderItem={({ item }) => <ParkingCard spot={item} variant="results" />}
+              renderItem={({ item }) => <ParkingCard spot={item} variant="results" selected={selectedSpot?.id === item.id} onSelect={() => { selectSpot(item.id); onModeChange("Map"); }} />}
               contentContainerStyle={styles.listContent}
               ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
-              ListEmptyComponent={<EmptyState title="No spots found" description="Try another destination or change your parking duration above." />}
               keyboardShouldPersistTaps="handled"
               keyboardDismissMode="on-drag"
             />
@@ -264,12 +258,13 @@ export default function ParkingResults({
             <View style={styles.handle} />
           </Pressable>
           </View>
-          <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} style={styles.panelScroll} contentContainerStyle={styles.panelContent}>
+          <ScrollView scrollEnabled={!minimizedEmptyResults} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} style={styles.panelScroll} contentContainerStyle={styles.panelContent}>
             {searchControls}
             <View
               pointerEvents={expanded ? "auto" : "none"}
               accessibilityElementsHidden={!expanded}
               importantForAccessibility={expanded ? "auto" : "no-hide-descendants"}
+              style={minimizedEmptyResults ? { opacity: 0 } : undefined}
             >
               <View style={styles.filters} onLayout={(event) => setFilterHeight(event.nativeEvent.layout.height)}>
                 <DurationFilter value={durations} onChange={changeDurations} />
@@ -283,7 +278,7 @@ export default function ParkingResults({
 }
 
 const styles = StyleSheet.create({
-  refreshNotice: { position: "absolute", bottom: 0, left: 0, right: 0, minHeight: 30, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: colors.primaryLight, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 6, zIndex: 2 },
+  statusTitle: { fontSize: 14, fontWeight: "600", color: colors.text },
   refreshText: { fontSize: 12, fontWeight: "600", color: colors.primary },
   resultCount: { color: colors.muted, fontSize: 12, textAlign: "center", paddingTop: 8, minHeight: 30 },
   screen: { flex: 1, backgroundColor: "#D9D9D9" },

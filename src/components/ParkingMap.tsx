@@ -1,11 +1,12 @@
-import { memo, useEffect, useRef, useState } from "react";
-import { Animated, StyleSheet, Text, View, useWindowDimensions } from "react-native";
-import Mapbox, { BackgroundLayer, Camera, FillLayer, MapView, MarkerView } from "@rnmapbox/maps";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { Animated, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import Mapbox, { BackgroundLayer, Camera, CircleLayer, FillLayer, LineLayer, MapView, MarkerView, ShapeSource } from "@rnmapbox/maps";
 import { ParkingSpot } from "@/types/parking";
 import { Coordinates, destinationZoom } from "@/lib/parkingSearch";
 import { HELSINKI_BOUNDS } from "@/lib/locationSearch";
 import ParkingMarker from "./ParkingMarker";
 import ParkingCard from "./ParkingCard";
+import { parkingFeatureCollection, selectedFeatureId } from "@/lib/parkingGeometry";
 
 export type ParkingMapProps = {
   parkingSpots: ParkingSpot[];
@@ -32,8 +33,9 @@ function ParkingMap({ parkingSpots, selectedSpotId, onSelectSpot, onDismissSpot,
   const [mapHeight, setMapHeight] = useState(0);
   const [popupHeight, setPopupHeight] = useState(180);
   const selectedSpot = parkingSpots.find((spot) => spot.id === selectedSpotId);
-  const selectedLongitude = selectedSpot?.longitude;
-  const selectedLatitude = selectedSpot?.latitude;
+  const selectedLongitude = selectedSpot?.displayPosition.longitude;
+  const selectedLatitude = selectedSpot?.displayPosition.latitude;
+  const features = useMemo(() => parkingFeatureCollection(parkingSpots, selectedSpotId), [parkingSpots, selectedSpotId]);
   const [styleFailed, setStyleFailed] = useState(false);
   const [mapReady, setMapReady] = useState(false);
   const target = initialLocation ?? helsinki;
@@ -48,13 +50,13 @@ function ParkingMap({ parkingSpots, selectedSpotId, onSelectSpot, onDismissSpot,
       if (parkingSpots.length > 1) {
         camera.current?.setCamera({
           bounds: {
-            ne: [Math.max(...parkingSpots.map((spot) => spot.longitude)) + 0.002, Math.max(...parkingSpots.map((spot) => spot.latitude)) + 0.001],
-            sw: [Math.min(...parkingSpots.map((spot) => spot.longitude)) - 0.002, Math.min(...parkingSpots.map((spot) => spot.latitude)) - 0.001],
+            ne: [Math.max(...parkingSpots.map((spot) => spot.displayPosition.longitude)) + 0.002, Math.max(...parkingSpots.map((spot) => spot.displayPosition.latitude)) + 0.001],
+            sw: [Math.min(...parkingSpots.map((spot) => spot.displayPosition.longitude)) - 0.002, Math.min(...parkingSpots.map((spot) => spot.displayPosition.latitude)) - 0.001],
           },
           padding, heading: 0, pitch: 0, animationMode: "easeTo", animationDuration: 700,
         });
       } else {
-        const center = parkingSpots[0] ?? helsinki;
+        const center = parkingSpots[0]?.displayPosition ?? helsinki;
         camera.current?.setCamera({ centerCoordinate: [center.longitude, center.latitude], zoomLevel: parkingSpots.length ? 14.5 : 12, padding, heading: 0, pitch: 0, animationMode: "easeTo", animationDuration: 700 });
       }
       return;
@@ -87,8 +89,16 @@ function ParkingMap({ parkingSpots, selectedSpotId, onSelectSpot, onDismissSpot,
       <FillLayer id="building" existing style={{ fillColor: "#DEDAD4" }} />
       {/* A map style layer shades the basemap beneath native marker views. */}
       <BackgroundLayer id="parking-focus-tint" style={{ backgroundColor: "#121B26", backgroundOpacity: selectedSpotId ? 0.22 : 0.04, backgroundOpacityTransition: { duration: 220, delay: 0 } }} />
-      {parkingSpots.map((spot) => (
-        <MarkerView key={spot.id} coordinate={[spot.longitude, spot.latitude]} allowOverlap isSelected={selectedSpotId === spot.id}>
+      <ShapeSource id="published-parking" shape={features} onPress={(event) => {
+        const id = selectedFeatureId(event.features, parkingSpots);
+        if (id) onSelectSpot(id);
+      }} hitbox={{ width: 44, height: 44 }}>
+        <FillLayer id="parking-areas" filter={["==", ["geometry-type"], "Polygon"]} style={{ fillColor: ["case", ["get", "selected"], "#1E6EF4", "#0055B8"], fillOpacity: 0.25 }} />
+        <LineLayer id="parking-lines" filter={["in", ["geometry-type"], ["literal", ["LineString", "Polygon"]]]} style={{ lineColor: ["case", ["get", "selected"], "#1E6EF4", "#0055B8"], lineWidth: ["case", ["get", "selected"], 6, 3] }} />
+        <CircleLayer id="parking-points" filter={["==", ["geometry-type"], "Point"]} style={{ circleColor: ["case", ["get", "selected"], "#1E6EF4", "#0055B8"], circleRadius: ["case", ["get", "selected"], 10, 7], circleStrokeColor: "white", circleStrokeWidth: 2 }} />
+      </ShapeSource>
+      {parkingSpots.filter((spot) => spot.geometry.type === "Point").map((spot) => (
+        <MarkerView key={spot.id} coordinate={[spot.displayPosition.longitude, spot.displayPosition.latitude]} allowOverlap isSelected={selectedSpotId === spot.id}>
           <ParkingMarker label={`Select ${spot.name}`} selected={selectedSpotId === spot.id} dimmed={Boolean(selectedSpotId) && selectedSpotId !== spot.id} onPress={() => onSelectSpot(spot.id)} />
         </MarkerView>
       ))}
@@ -101,11 +111,11 @@ function ParkingMap({ parkingSpots, selectedSpotId, onSelectSpot, onDismissSpot,
       {userLocation && <MarkerView coordinate={[userLocation.longitude, userLocation.latitude]} allowOverlap>
         <View pointerEvents="none" accessibilityLabel="Your current location" style={styles.locationHalo}><View style={styles.locationDot} /></View>
       </MarkerView>}
-      {popupSpot && <MarkerView key={`popup-${popupSpot.id}`} coordinate={[popupSpot.longitude, popupSpot.latitude]} anchor={{ x: 0.5, y: 0 }} allowOverlap isSelected={Boolean(selectedSpotId)}>
+      {popupSpot && <MarkerView key={`popup-${popupSpot.id}`} coordinate={[popupSpot.displayPosition.longitude, popupSpot.displayPosition.latitude]} anchor={{ x: 0.5, y: 0 }} allowOverlap isSelected={Boolean(selectedSpotId)}>
         <View onLayout={(event) => setPopupHeight(event.nativeEvent.layout.height)} style={{ width: Math.min(340, width - 40), paddingTop: 36 }} pointerEvents={selectedSpotId ? "auto" : "none"} accessibilityElementsHidden={!selectedSpotId} importantForAccessibility={selectedSpotId ? "auto" : "no-hide-descendants"} onTouchEnd={(event) => event.stopPropagation()}>
           <Animated.View style={{ opacity: popupProgress, transform: [{ translateY: popupProgress.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }] }}>
             <View style={styles.calloutArrow} />
-            <ParkingCard spot={popupSpot} variant="results" />
+            <ScrollView style={{ maxHeight: Math.max(140, mapHeight * 0.4) }}><ParkingCard spot={popupSpot} variant="results" /></ScrollView>
           </Animated.View>
         </View>
       </MarkerView>}

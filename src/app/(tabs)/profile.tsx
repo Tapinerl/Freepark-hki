@@ -5,8 +5,7 @@ import { Button, Card, ui } from "@/components/ui";
 import { useParkingSpots } from "@/hooks/useParkingSpots";
 
 export default function ProfileScreen() {
-  const { spots } = useParkingSpots();
-  const saved = spots.filter((spot) => spot.isFavorite);
+  const { savedSpots: saved } = useParkingSpots();
   return (
     <Screen fit>
       <Text style={[ui.title, { fontSize: 24, lineHeight: 28 }]}>Account & settings</Text>
@@ -14,7 +13,7 @@ export default function ProfileScreen() {
         <Text style={ui.label}>Account</Text>
         <Text style={ui.heading}>Welcome to FreePark</Text>
         <Text style={[ui.subtitle, { fontSize: 14, lineHeight: 20 }]}>
-          Your Helsinki parking companion. You’re exploring in demo mode.
+          Your Helsinki parking companion. Accounts are not connected yet.
         </Text>
         <View style={ui.row}>
           <View style={{ flex: 1 }}>
