@@ -1,5 +1,4 @@
 import type { Coordinates } from "./parkingSearch";
-import { mockParkingSpots } from "@/data/mockParkingSpots";
 
 // Bounds include Helsinki's eastern districts; municipality context below
 // excludes neighboring cities that share this rectangular map extent.
@@ -19,14 +18,8 @@ type Feature = {
   };
 };
 export async function searchLocations(query: string, signal: AbortSignal): Promise<Destination[]> {
-  // Known neighborhoods provide suggestions where the geocoder has no
-  // neighborhood coverage. Use the app's existing representative map points.
-  const normalized = query.trim().toLocaleLowerCase("fi");
-  const local = mockParkingSpots.filter((spot) => spot.neighborhood.toLocaleLowerCase("fi").startsWith(normalized))
-    .map((spot) => ({ id: `neighborhood-${spot.neighborhood}`, label: `${spot.neighborhood}, Helsinki, Finland`, latitude: spot.latitude, longitude: spot.longitude }));
   const token = process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN?.trim();
   if (!token) {
-    if (local.length) return local;
     throw new Error("Location suggestions need the Mapbox access token.");
   }
   const params = new URLSearchParams({
@@ -48,5 +41,5 @@ export async function searchLocations(query: string, signal: AbortSignal): Promi
     const label = properties.full_address ?? [properties.name, properties.place_formatted].filter(Boolean).join(", ");
     return label ? [{ ...point, id: properties.mapbox_id ?? feature.id ?? label, label }] : [];
   });
-  return [...local, ...remote].slice(0, 5);
+  return remote.slice(0, 5);
 }

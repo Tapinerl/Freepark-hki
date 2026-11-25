@@ -6,8 +6,7 @@ import EmptyState from "@/components/EmptyState";
 import { Button, ui } from "@/components/ui";
 import { useParkingSpots } from "@/hooks/useParkingSpots";
 export default function SavedSpotsScreen() {
-  const { spots } = useParkingSpots();
-  const saved = spots.filter((spot) => spot.isFavorite);
+  const { savedSpots: saved } = useParkingSpots();
   return (
     <Screen>
       <Text style={ui.title}>Saved Spots</Text>
